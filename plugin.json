@@ -1,0 +1,21 @@
+{
+  "main": "dist/index.html",
+  "logo": "public/logo.png",
+  "features": [
+    {
+      "code": "pdg",
+      "explain": "Release Document Generator",
+      "cmds": ["pdg", "发布文档", "Release"]
+    }
+  ],
+  "preload": "dist/preload.js",
+  "name": "pdg-generator",
+  "version": "1.0.0",
+  "description": "Generate release documents dynamically.",
+  "author": "Antigravity",
+  "homepage": "",
+  "pluginSetting": {
+    "single": true,
+    "height": 600
+  }
+}
