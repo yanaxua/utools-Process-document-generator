@@ -16,38 +16,48 @@
     <div class="mind-node-item">
       <!-- Main Row: The Card and the Branch Out line -->
       <div class="node-bus-row">
-        <div 
-          class="node-card drag-handle" 
-          :class="{ 
-            'is-nesting': dragOverPos === 'nest', 
-            'is-dragging': store.draggingItem?.id === node.id 
-          }"
-          draggable="true"
-          @dragstart="onDragStart"
-          @dragend="onDragEnd"
-          @dragover.prevent.stop="onDragOver('nest')"
-          @dragleave="onDragLeave"
-          @drop.stop="onDropNest"
-          @dblclick="onEdit"
-        >
-          <div class="node-inner">
-            <span class="type-tag" :class="material?.type">{{ getTypeLabel(material?.type) }}</span>
-            <div class="name-text" :title="material?.name">{{ material?.name || '未知素材' }}</div>
-          </div>
-          
-          <!-- Actions: Placed inside node-card for inheritance-based hover -->
-          <div class="node-actions">
-            <button class="act-btn" :class="{active: node.showNumbering}" @click.stop="toggleNumbering" title="序号">
-              <lucide-list-ordered :size="10" />
-            </button>
-            <button v-if="node.showNumbering" class="act-btn style-txt" @click.stop="cycleStyle">
-              {{ node.numberingStyle }}
-            </button>
-            <button class="act-btn del" @click.stop="$emit('remove')">
-              <lucide-trash-2 :size="10" />
-            </button>
-          </div>
-        </div>
+        <BasePopover position="top" :delay="300">
+          <template #trigger>
+            <div 
+              class="node-card drag-handle" 
+              :class="{ 
+                'is-nesting': dragOverPos === 'nest', 
+                'is-dragging': store.draggingItem?.id === node.id,
+                'has-var': material?.varName
+              }"
+              draggable="true"
+              @dragstart="onDragStart"
+              @dragend="onDragEnd"
+              @dragover.prevent.stop="onDragOver('nest')"
+              @dragleave="onDragLeave"
+              @drop.stop="onDropNest"
+              @dblclick="onEdit"
+            >
+              <div class="node-inner">
+                <span class="type-tag" :class="material?.type">
+                  {{ getTypeLabel(material?.type) }}
+                  <span v-if="material?.varName" class="var-dot">V</span>
+                </span>
+                <div class="name-text" :title="material?.name">{{ material?.name || '未知素材' }}</div>
+              </div>
+              
+              <!-- Actions -->
+              <div class="node-actions">
+                <button class="act-btn" :class="{active: node.showNumbering}" @click.stop="toggleNumbering" title="序号">
+                  <lucide-list-ordered :size="10" />
+                </button>
+                <button v-if="node.showNumbering" class="act-btn style-txt" @click.stop="cycleStyle">
+                  {{ node.numberingStyle }}
+                </button>
+                <button class="act-btn del" @click.stop="$emit('remove')">
+                  <lucide-trash-2 :size="10" />
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <MaterialInfoCard :material="material!" />
+        </BasePopover>
 
         <!-- The line that goes from THIS node to its children -->
         <div v-if="safeChildren.length > 0 || dragOverPos === 'nest'" class="line-to-children"></div>
@@ -93,6 +103,8 @@ import { Trash2 as LucideTrash2, ListOrdered as LucideListOrdered } from 'lucide
 import { useProjectStore } from '../../store/projectStore';
 import { nanoid } from 'nanoid';
 import type { Project, LayoutItem } from '../../types/project';
+import BasePopover from '../common/BasePopover.vue';
+import MaterialInfoCard from '../common/MaterialInfoCard.vue';
 
 const props = defineProps<{
   node: LayoutItem;
@@ -121,11 +133,17 @@ const getTypeLabel = (type?: string) => {
   }
 };
 
+
+
 const onDragStart = (e: DragEvent) => { 
     store.draggingItem = props.node;
-    if (e.dataTransfer) {
+    if (e && e.dataTransfer) {
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', props.node.id);
+        
+        // Remove popover content to avoid sticking
+        const popovers = document.querySelectorAll('.popover-content');
+        popovers.forEach(p => (p as HTMLElement).style.display = 'none');
     }
 };
 
@@ -220,8 +238,14 @@ const resetDrag = () => {
 };
 
 const removeChild = (id: string) => {
-  const idx = props.node.children.findIndex(c => c.id === id);
-  if (idx > -1) props.node.children.splice(idx, 1);
+  store.confirmState = {
+      title: '移除子节点',
+      message: '确定要从排版中移除此节点吗？相关的子节点也将被一并移除。',
+      onConfirm: () => {
+          const idx = props.node.children.findIndex(c => c.id === id);
+          if (idx > -1) props.node.children.splice(idx, 1);
+      }
+  };
 };
 
 const toggleNumbering = () => { props.node.showNumbering = !props.node.showNumbering; };
@@ -460,4 +484,5 @@ const onEdit = () => {};
 .act-btn.del { color: #ef4444; }
 .act-btn.style-txt { width: auto; padding: 0 4px; font-size: 8px; font-weight: 800; font-family: monospace; }
 
+/* Popover Custom Styles - Unified with Editor.vue */
 </style>

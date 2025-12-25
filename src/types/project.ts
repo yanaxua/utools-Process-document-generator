@@ -4,6 +4,7 @@ export interface MaterialBase {
   id: string;
   name: string;
   type: MaterialType;
+  varName?: string; // NEW: used for variable substitution like {{varName}}
   description?: string;
 }
 
@@ -15,7 +16,7 @@ export interface FixedMaterial extends MaterialBase {
 export interface OptionItem {
   id: string;
   value: string;
-  label: string;
+  label?: string;
 }
 
 export interface OptionMaterial extends MaterialBase {

@@ -53,40 +53,43 @@
       </div>
     </main>
 
-    <!-- Create Dialog -->
-    <transition name="modal">
-      <div v-if="showCreateDialog" class="modal-overlay" @click.self="showCreateDialog = false">
-        <div class="modal premium-panel animate-pop-in">
-          <div class="modal-header">
-            <div class="title-icon">✨</div>
-            <h2>新建配置项目</h2>
-            <p>创建一个新的发版模版配置</p>
-          </div>
-          
-          <div class="modal-body">
-            <div class="form-item">
-              <label>项目名称</label>
-              <div class="input-container">
-                <lucide-type :size="16" class="icon" />
-                <input v-model="newProjectName" placeholder="例如：新零售线发版邮件" ref="nameInput" />
-              </div>
-            </div>
-            
-            <div class="form-item">
-              <label>描述信息</label>
-              <textarea v-model="newProjectDesc" placeholder="简要描述该项目的使用场景..." rows="3"></textarea>
-            </div>
-          </div>
-          
-          <div class="modal-footer">
-            <button class="btn-ghost" @click="showCreateDialog = false">取消</button>
-            <button class="btn-primary" @click="handleCreate" :disabled="!newProjectName">
-                立即创建
-            </button>
+    <!-- Create Dialog using BaseDialog -->
+    <BaseDialog
+      :show="showCreateDialog"
+      title="✨ 新建配置项目"
+      width="400px"
+      :show-close="true"
+      @close="showCreateDialog = false"
+    >
+      <div class="modal-intro">
+        <p>创建一个新的发版模版配置</p>
+      </div>
+      
+      <div class="prop-form">
+        <div class="form-item">
+          <label>项目名称</label>
+          <div class="input-container">
+            <lucide-type :size="16" class="icon" />
+            <input v-model="newProjectName" placeholder="例如：新零售线发版邮件" ref="nameInput" />
           </div>
         </div>
+        
+        <div class="form-item">
+          <label>描述信息</label>
+          <textarea v-model="newProjectDesc" placeholder="简要描述该项目的使用场景..." rows="3"></textarea>
+        </div>
       </div>
-    </transition>
+      
+      <template #footer>
+        <button class="btn-ghost" @click="showCreateDialog = false">取消</button>
+        <button class="btn-primary" @click="handleCreate" :disabled="!newProjectName">
+            立即创建
+        </button>
+      </template>
+    </BaseDialog>
+
+    <!-- Unified Confirm Modal -->
+    <ConfirmModal />
   </div>
 </template>
 
@@ -107,6 +110,9 @@ import { format } from 'date-fns';
 import { storeToRefs } from 'pinia';
 import type { Project } from '../types/project';
 import { nanoid } from 'nanoid';
+import BaseDialog from '../components/common/BaseDialog.vue';
+import ConfirmModal from '../components/common/ConfirmModal.vue';
+
 
 const router = useRouter();
 const store = useProjectStore();
@@ -131,50 +137,70 @@ const handleCreate = async () => {
 const createDemoProject = async () => {
   const demo: Project = {
     id: nanoid(),
-    name: '示例：发版邮件内容生成',
-    description: '自动组合环境、模块与操作内容的发布邮件模版',
+    name: '示例：多环境动态配置手册',
+    description: '演示：客户 > 环境 > 模块 > 版本 的深度嵌套与动态配置同步',
     updatedAt: Date.now(),
     materials: [
-      { id: '1', name: '邮件开头', type: 'fixed', content: '各位好，明日发布计划如下：' },
-      { id: '2', name: '发布环境', type: 'option', options: [
-          { id: 'e1', value: '【生产环境】', label: '生产' },
-          { id: 'e2', value: '【预发环境】', label: '预发' }
+      { id: 'm1', name: '邮件页眉', type: 'fixed', content: '各位好，本日发版任务如下：' },
+      { id: 'm2', name: '选择客户', type: 'option', options: [
+          { id: 'c1', value: '【字节跳动】' },
+          { id: 'c2', value: '【美团点评】' }
       ]},
-      { id: '3', name: '操作模块', type: 'option', options: [
-          { id: 'm1', value: 'API服务器', label: '后端API' },
-          { id: 'm2', value: '前端项目', label: '前端UI' }
+      { id: 'm3', name: '所属环境', type: 'option', options: [
+          { id: 'e1', value: '👉 生产 PROD' },
+          { id: 'e2', value: '🧪 预发 STAGE' }
       ]},
-      { id: '4', name: '执行记录', type: 'option', options: [
-          { id: 's1', value: '需要升级SQL', label: 'SQL升级' },
-          { id: 's2', value: '静态资源替换', label: '静态资源' },
-          { id: 's3', value: '无额外操作', label: '默认' }
+      { id: 'm4', name: '具体模块', type: 'option', options: [
+          { id: 'a1', value: '核心网关' },
+          { id: 'a2', value: '支付服务' },
+          { id: 'a3', value: '监控组件' }
       ]},
-      { id: '5', name: '版本号', type: 'fill', fillType: 'text', defaultValue: 'v1.0.0' },
-      { id: '6', name: '备注', type: 'fill', fillType: 'text', defaultValue: '无' },
-      { id: '7', name: '邮件结尾', type: 'fixed', content: '\n请相关人员知悉，谢谢。' }
+      { id: 'm5', name: '同步版本号', type: 'fill', fillType: 'text', varName: 'target_ver', defaultValue: 'v2.4.0' },
+      { id: 'm6', name: '生效日期', type: 'fill', fillType: 'date', varName: 'pub_date', defaultValue: format(new Date(), 'yyyy-MM-dd') },
+      { id: 'm7', name: '责任确认', type: 'fixed', content: '\n以上内容计划于 {{pub_date}} 正式发布，版本号统一为 {{target_ver}}，请各方注意流量切换。' }
     ],
     layout: [
-      { id: 'l1', materialId: '1', children: [] },
-      { id: 'l2', materialId: '2', children: [
-          { id: 'l3', materialId: '3', children: [
-              { id: 'l4', materialId: '4', children: [] }
-          ]}
-      ]},
-      { id: 'l5', materialId: '5', children: [] },
-      { id: 'l6', materialId: '6', children: [] },
-      { id: 'l7', materialId: '7', children: [] }
+      { id: 'l1', materialId: 'm1', children: [] },
+      { 
+        id: 'l2', 
+        materialId: 'm2', 
+        children: [
+          { 
+            id: 'l3', 
+            materialId: 'm3', 
+            children: [
+              { 
+                id: 'l4', 
+                materialId: 'm4', 
+                children: [
+                  { id: 'l5', materialId: 'm5', children: [] }
+                ] 
+              }
+            ] 
+          }
+        ] 
+      },
+      { id: 'l6', materialId: 'm6', children: [] },
+      { id: 'l7', materialId: 'm7', children: [] }
     ]
   };
   await store.updateProject(demo);
-  (window as any).utoolsUtils.showNotification('示例项目已生成');
+  (window as any).utoolsUtils.showNotification('深度嵌套示例已生成，请进入行文模式体验');
 };
+
+
 
 const formatDate = (ts: number) => format(ts, 'yyyy-MM-dd HH:mm');
 
-const confirmDelete = async (p: any) => {
-  if (confirm(`确定要删除项目 "${p.name}" 吗？`)) {
-    await store.deleteProject(p.id);
-  }
+const confirmDelete = (p: any) => {
+  store.confirmState = {
+    title: '删除项目',
+    message: `确定要彻底删除项目 "${p.name}" 吗？此操作无法撤销。`,
+    onConfirm: async () => {
+      await store.deleteProject(p.id);
+      (window as any).utoolsUtils.showNotification('项目已删除');
+    }
+  };
 };
 
 const exportProject = (p: any) => {

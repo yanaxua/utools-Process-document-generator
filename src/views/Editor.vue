@@ -63,14 +63,25 @@
           @end="store.draggingItem = null"
         >
           <template #item="{ element }">
-            <div class="material-item" :class="[element.type]" @click="handleStartEdit(element)">
-              <span class="m-icon">
-                <lucide-type v-if="element.type === 'fixed'" :size="13" />
-                <lucide-list v-else-if="element.type === 'option'" :size="13" />
-                <lucide-calendar v-else-if="element.type === 'fill'" :size="13" />
-              </span>
-              <span class="m-name">{{ element.name }}</span>
-              <button class="del-small" @click.stop="store.removeMaterial(element.id)">
+            <div class="material-item" :class="[element.type, { 'has-var': element.varName }]" @click="handleStartEdit(element)">
+              <lucide-grip-vertical :size="12" class="m-grip" />
+              
+              <BasePopover position="right" :delay="300">
+                <template #trigger>
+                  <div class="m-item-content">
+                    <span class="m-icon">
+                      <lucide-type v-if="element.type === 'fixed' || (element.type === 'fill' && element.fillType === 'text')" :size="13" />
+                      <lucide-list v-else-if="element.type === 'option'" :size="13" />
+                      <lucide-calendar v-else-if="element.type === 'fill' && element.fillType === 'date'" :size="13" />
+                      <span v-if="element.varName" class="var-dot">V</span>
+                    </span>
+                    <span class="m-name">{{ element.name }}</span>
+                  </div>
+                </template>
+                <MaterialInfoCard :material="element" />
+              </BasePopover>
+
+              <button class="del-small" @click.stop="handleRemoveMaterial(element)">
                 <lucide-x :size="12" />
               </button>
             </div>
@@ -92,7 +103,7 @@
           <div class="canvas-viewport">
             <div class="layout-list">
                 <LayoutNode 
-                  v-for="(element, idx) in currentProject.layout"
+                  v-for="element in currentProject.layout"
                   :key="element.id"
                   :node="element" 
                   :project="currentProject" 
@@ -113,76 +124,15 @@
       </main>
   </div>
 
-    <!-- Unified Material Modal (Create & Edit) -->
-    <div v-if="editingMaterial" class="modal-overlay" @click.self="cancelEdit">
-      <div class="modal-content material-modal animate-in">
-        <div class="modal-header">
-          <h3>{{ isNewMaterial ? '✨ 新建素材' : '📝 编辑素材' }}</h3>
-          <button class="close-btn" @click="cancelEdit"><lucide-x :size="18" /></button>
-        </div>
-        
-        <div class="modal-body prop-form">
-          <div class="form-group">
-            <label>素材名称</label>
-            <input v-model="editingMaterial.name" placeholder="请输入素材名称..." ref="nameInput" />
-          </div>
+    <!-- Unified Material Modal using Extracted Component -->
+    <MaterialDialog
+      v-model="editingMaterial"
+      :is-new="isNewMaterial"
+      @confirm="handleMaterialConfirm"
+    />
 
-          <div class="form-group">
-            <label>素材类型</label>
-            <select v-model="editingMaterial.type" :disabled="!isNewMaterial">
-              <option value="fixed">固定字段 (静态文本)</option>
-              <option value="option">选项层级 (单选/多选)</option>
-              <option value="fill">填空录入 (动态输入)</option>
-            </select>
-          </div>
-
-          <!-- Type Specific Fields -->
-          <div v-if="editingMaterial.type === 'fixed'" class="form-group">
-            <label>固定内容</label>
-            <textarea v-model="editingMaterial.content" rows="3" placeholder="生成时直接使用的文本..."></textarea>
-          </div>
-
-          <div v-if="editingMaterial.type === 'option'" class="form-group">
-            <label>选项管理</label>
-            <div class="option-manager-box">
-              <draggable v-model="editingMaterial.options" item-key="id" class="opt-list" handle=".opt-drag">
-                <template #item="{ element, index }">
-                  <div class="opt-edit-row">
-                    <lucide-grip-vertical :size="14" class="opt-drag" />
-                    <input v-model="element.value" placeholder="选项值" />
-                    <button class="remove-opt" @click="removeOption(editingMaterial, index)">
-                      <lucide-x :size="14" />
-                    </button>
-                  </div>
-                </template>
-              </draggable>
-              <div class="opt-add-zone">
-                <input v-model="newOptionVal" placeholder="输入新选项..." @keyup.enter="addOption(editingMaterial)" />
-                <button class="add-opt-btn" @click="addOption(editingMaterial)">
-                  <lucide-plus :size="16" />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="editingMaterial.type === 'fill'" class="form-group">
-            <label>输入类型</label>
-            <select v-model="editingMaterial.fillType">
-              <option value="text">普通文本</option>
-              <option value="date">日期选择</option>
-            </select>
-            <label>默认值 (可选)</label>
-            <textarea v-if="editingMaterial.fillType === 'text'" v-model="editingMaterial.defaultValue" placeholder="未输入时的默认填充内容..." rows="2"></textarea>
-            <input v-else v-model="editingMaterial.defaultValue" type="date" @click="(e: any) => e.target.showPicker()" />
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button class="btn-cancel" @click="cancelEdit">取消</button>
-          <button class="btn-confirm" @click="confirmEdit">保存素材</button>
-        </div>
-      </div>
-    </div>
+    <!-- Unified Confirm Modal -->
+    <ConfirmModal />
   </div>
 </template>
 
@@ -198,14 +148,20 @@ import {
   ChevronLeft as LucideChevronLeft, 
   Type as LucideType, 
   List as LucideList, 
-  Keyboard as LucideInput, 
   X as LucideX,
   Calendar as LucideCalendar,
-  Plus as LucidePlus
+  Plus as LucidePlus,
+  GripVertical as LucideGripVertical
 } from 'lucide-vue-next';
 import LayoutNode from '../components/editor/LayoutNode.vue';
 import { nanoid } from 'nanoid';
 import type { Material, LayoutItem } from '../types/project';
+import ConfirmModal from '../components/common/ConfirmModal.vue';
+import MaterialDialog from '../components/common/MaterialDialog.vue';
+import BasePopover from '../components/common/BasePopover.vue';
+import MaterialInfoCard from '../components/common/MaterialInfoCard.vue';
+
+
 
 
 const props = defineProps<{ id: string }>();
@@ -215,9 +171,8 @@ const { currentProject } = storeToRefs(store);
 
 const editingMaterial = ref<Material | null>(null);
 const isNewMaterial = ref(false);
-const newOptionVal = ref('');
 const filterType = ref('all');
-const nameInput = ref<HTMLInputElement | null>(null);
+
 
 const handleStartCreate = () => {
   isNewMaterial.value = true;
@@ -227,11 +182,6 @@ const handleStartCreate = () => {
     type: 'fixed',
     content: ''
   } as any;
-  
-  // 自动聚焦
-  setTimeout(() => {
-    nameInput.value?.focus();
-  }, 100);
 };
 
 // 监听类型切换，自动补全默认属性
@@ -254,43 +204,67 @@ const handleStartEdit = (m: Material) => {
 
 const cancelEdit = () => {
   editingMaterial.value = null;
-  newOptionVal.value = '';
 };
 
-const confirmEdit = () => {
-  if (!editingMaterial.value || !editingMaterial.value.name.trim()) return;
+const handleMaterialConfirm = (m: Material) => {
+  if (!currentProject.value) return;
   
   if (isNewMaterial.value) {
-    currentProject.value?.materials.push(editingMaterial.value);
+    currentProject.value.materials.push(m);
   } else {
-    const idx = currentProject.value?.materials.findIndex(m => m.id === editingMaterial.value?.id);
-    if (idx !== undefined && idx !== -1 && currentProject.value) {
-      currentProject.value.materials[idx] = editingMaterial.value;
+    const idx = currentProject.value.materials.findIndex(item => item.id === m.id);
+    if (idx !== -1) {
+      currentProject.value.materials[idx] = m;
     }
   }
   cancelEdit();
 };
 
-const filteredMaterials = computed(() => {
-  if (!currentProject.value) return [];
-  if (filterType.value === 'all') return currentProject.value.materials;
-  return currentProject.value.materials.filter(m => m.type === filterType.value);
+const filteredMaterials = computed({
+  get() {
+    if (!currentProject.value) return [];
+    if (filterType.value === 'all') return currentProject.value.materials;
+    return currentProject.value.materials.filter(m => m.type === filterType.value);
+  },
+  set(newVal) {
+    if (!currentProject.value) return;
+    if (filterType.value === 'all') {
+      currentProject.value.materials = newVal;
+    } else {
+      const others = currentProject.value.materials.filter(m => m.type !== filterType.value);
+      currentProject.value.materials = [...newVal, ...others];
+    }
+  }
 });
 
 onMounted(async () => {
   await store.selectProject(props.id);
 });
 
-const addOption = (m: any) => {
-  if (!newOptionVal.value.trim()) return;
-  if (!m.options) m.options = [];
-  m.options.push({ id: nanoid(), value: newOptionVal.value.trim(), label: newOptionVal.value.trim() });
-  newOptionVal.value = '';
+const handleRemoveMaterial = (m: Material) => {
+    const isUsed = currentProject.value?.layout.some(item => {
+        const check = (node: any): boolean => {
+            if (node.materialId === m.id) return true;
+            if (node.children) return node.children.some(check);
+            return false;
+        };
+        return check(item);
+    });
+
+    const msg = isUsed 
+        ? `素材“${m.name}”正被布局引用，删除后对应的布局节点也会消失。`
+        : `你确定要彻底删除素材“${m.name}”吗？此操作不可撤销。`;
+
+    store.confirmState = {
+        title: '删除素材',
+        message: msg,
+        onConfirm: () => {
+            store.removeMaterial(m.id);
+            (window as any).utoolsUtils.showNotification('素材已删除');
+        }
+    };
 };
 
-const removeOption = (m: any, idx: number) => {
-  m.options.splice(idx, 1);
-};
 
 const save = async () => {
   if (currentProject.value) {
@@ -311,13 +285,22 @@ const cloneMaterial = (m: Material): LayoutItem => {
 
 const removeItem = (id: string) => {
   if (!currentProject.value) return;
-  const filter = (items: LayoutItem[]): LayoutItem[] => {
-    return items.filter(i => i.id !== id).map(i => ({
-      ...i,
-      children: filter(i.children)
-    }));
+  
+  store.confirmState = {
+      title: '移除节点',
+      message: '确定要从排版中移除此节点吗？相关的子节点也将被一并移除。',
+      onConfirm: () => {
+          const filter = (items: LayoutItem[]): LayoutItem[] => {
+            return items.filter(i => i.id !== id).map(i => ({
+              ...i,
+              children: i.children ? filter(i.children) : []
+            }));
+          };
+          if (currentProject.value) {
+            currentProject.value.layout = filter(currentProject.value.layout);
+          }
+      }
   };
-  currentProject.value.layout = filter(currentProject.value.layout);
 };
 
 
@@ -711,15 +694,31 @@ const removeItem = (id: string) => {
 .material-item {
   display: flex;
   align-items: center;
-  padding: 6px 8px;
-  background: #fff;
-  border: 1.5px solid #f1f5f9;
-  border-radius: 6px;
+  gap: 8px;
+  padding: 8px 10px;
+  background: white;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
-  gap: 6px;
+  user-select: none;
   margin-bottom: 4px;
+}
+
+.m-grip {
+    color: #cbd5e1;
+    cursor: grab;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.material-item:hover .m-grip {
+    opacity: 1;
+}
+
+.material-item:active {
+    cursor: grabbing;
 }
 
 .material-item:hover {
@@ -878,6 +877,127 @@ const removeItem = (id: string) => {
     padding: 8px;
 }
 
+/* Popover Custom Styles */
+.m-popover-info {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 180px;
+}
+
+.m-pop-header {
+    margin-bottom: 4px;
+}
+
+.m-pop-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #1e293b;
+}
+
+.m-pop-body .row {
+    font-size: 11px;
+    color: #64748b;
+    margin-bottom: 8px;
+}
+
+.row-label {
+    font-size: 10px;
+    font-weight: 800;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.v-tag {
+    background: #eef2ff;
+    color: #4f46e5;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-weight: 800;
+}
+
+.row-preview {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 11px;
+    color: #475569;
+    line-height: 1.4;
+    white-space: pre-wrap;
+}
+
+.pop-opt-full-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+  max-height: 350px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* Custom Scrollbar for Popover List */
+.pop-opt-full-list::-webkit-scrollbar {
+  width: 4px;
+}
+.pop-opt-full-list::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 4px;
+}
+
+.pop-opt-full-item {
+  background: #f0fdf4;
+  border: 1px solid #dcfce7;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.opt-full-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: #166534;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(22, 101, 52, 0.1);
+  padding-bottom: 2px;
+}
+
+.opt-full-content {
+  font-size: 11px;
+  color: #166534;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+
+.var-dot {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #6366f1;
+    color: white;
+    font-size: 8px;
+    font-weight: 900;
+    width: 12px;
+    height: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 1.5px solid white;
+}
+
+.m-item-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
 .opt-list {
     display: flex;
     flex-direction: column;
@@ -944,4 +1064,31 @@ const removeItem = (id: string) => {
     border-radius: 8px;
     box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
 }
+.var-input-box {
+    display: flex;
+    align-items: center;
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0 12px;
+}
+.var-input-box input {
+    border: none !important;
+    background: transparent !important;
+    padding: 8px 4px !important;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: #4f46e5;
+}
+.var-input-box .prefix, .var-input-box .suffix {
+    color: #94a3b8;
+    font-weight: 800;
+    font-family: 'JetBrains Mono', monospace;
+}
+.field-hint {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-top: 4px;
+}
 </style>
+

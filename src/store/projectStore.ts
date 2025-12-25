@@ -8,7 +8,13 @@ export const useProjectStore = defineStore('project', {
     projects: [] as Project[],
     currentProject: null as Project | null,
     loading: false,
-    draggingItem: null as any | null, // Track currently dragged material or layout item
+    draggingItem: null as any | null,
+    confirmState: null as { 
+      title: string; 
+      message: string; 
+      onConfirm: () => void; 
+      onCancel?: () => void;
+    } | null, // Global confirmation state for unified UI
   }),
   actions: {
     async fetchProjects() {

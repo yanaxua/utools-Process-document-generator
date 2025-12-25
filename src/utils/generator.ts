@@ -12,18 +12,38 @@ export interface GenerationState {
  * 2. 嵌套关系生成笛卡尔积组合。
  */
 export function generateText(project: Project, state: GenerationState): string {
-  return project.layout
+  let finalLines = project.layout
     .map(item => processLayoutItem(item, project, state).join('\n'))
     .filter(s => s.length > 0)
     .join('\n');
+
+  // 2. Second Pass: Variable Substitution {{varName}}
+  // We collect all available values from the state to build a global variable map
+  const varMap: Record<string, string> = {};
+  
+  // Fill values by material varName
+  project.materials.forEach(m => {
+      const val = state.fillValues[m.id]; // We'll simplify state to use materialId where possible for sync
+      if (m.varName && val !== undefined) {
+          varMap[m.varName] = val;
+      }
+      // Also support name-based matching if varName is empty
+      if (m.name && val !== undefined && !varMap[m.name]) {
+          varMap[m.name] = val;
+      }
+  });
+
+  // Perform replacement
+  return finalLines.replace(/\{\{(.*?)\}\}/g, (match, key) => {
+      const k = key.trim();
+      return varMap[k] !== undefined ? varMap[k] : match;
+  });
 }
 
-function processLayoutItem(item: LayoutItem, project: Project, state: GenerationState, parentOptionValue: string = ''): string[] {
+
+function processLayoutItem(item: LayoutItem, project: Project, state: GenerationState): string[] {
   const material = project.materials.find(m => m.id === item.materialId);
   if (!material) return [];
-
-  // Create an instance-specific key for Fill materials if they have a parent option value
-  const instanceKey = parentOptionValue ? `${item.materialId}:${parentOptionValue}` : item.materialId;
 
   // 1. Get current item's base values
   let currentValues: string[] = [];
@@ -31,11 +51,15 @@ function processLayoutItem(item: LayoutItem, project: Project, state: Generation
   if (material.type === 'fixed') {
     currentValues = [(material as FixedMaterial).content];
   } else if (material.type === 'fill') {
-    // USE item.id as the instance key for static full structure view
-    currentValues = [state.fillValues[item.id] || (material as FillMaterial).defaultValue || ''];
+    // Priority: 
+    // 1. Instance-specific value (item.id)
+    // 2. Material-specific value (material.id) for sync/global
+    const val = state.fillValues[item.id] || state.fillValues[material.id] || (material as FillMaterial).defaultValue || '';
+    currentValues = [val];
   } else if (material.type === 'option') {
     currentValues = state.selectedOptions[material.id] || [];
   }
+
 
 
   if (currentValues.length === 0) return [];
@@ -46,21 +70,21 @@ function processLayoutItem(item: LayoutItem, project: Project, state: Generation
   }
 
   // 3. Recursive processing
+  // Collect all results from children
+  const childrenResults = item.children
+    .map(child => processLayoutItem(child, project, state))
+    .filter(res => res.length > 0);
+
+  if (childrenResults.length === 0) {
+    // If no children produced results, just return current values
+    return applyNumbering(item, currentValues);
+  }
+
   let allCombinations: string[] = [];
-  
+  const childCombinations = cartesianProduct(childrenResults);
+
   for (const val of currentValues) {
-    // Collect all results from children for THIS specific parent value
-    const childrenResults = item.children
-      .map(child => processLayoutItem(child, project, state, val))
-      .filter(res => res.length > 0);
-
-    if (childrenResults.length === 0) {
-      allCombinations.push(val);
-      continue;
-    }
-
-    const combinations = cartesianProduct(childrenResults);
-    for (const combo of combinations) {
+    for (const combo of childCombinations) {
       allCombinations.push(`${val} ${combo.join(' ')}`.trim());
     }
   }

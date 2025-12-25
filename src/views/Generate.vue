@@ -28,55 +28,130 @@
 
     <div class="generate-body">
       <!-- Left: Selection -->
-      <aside class="selection-panel premium-card">
-        <div class="section-title">参数配置 / Selection</div>
-        
-        <div 
-          v-for="item in activeConfigItems" 
-          :key="item.key" 
-          class="config-item"
-          :style="{ marginLeft: (item.depth * 12) + 'px' }"
-          :class="{ 'is-fixed': item.material.type === 'fixed' }"
-        >
-          <div class="item-header">
-            <div class="header-line" v-if="item.depth > 0"></div>
-            <span class="type-icon" :class="item.material.type"></span>
-            <label>
-              {{ item.material.name }}
-            </label>
-          </div>
-          
-          <div class="item-control">
-            <!-- Option Type -->
-            <template v-if="item.material.type === 'option'">
-               <div class="chip-container">
-                 <label v-for="opt in item.material.options" :key="opt.id" class="chip" :class="{active: state.selectedOptions[item.material.id]?.includes(opt.value)}">
-                   <input type="checkbox" :value="opt.value" v-model="state.selectedOptions[item.material.id]" style="display:none" />
-                   {{ opt.label }}
-                 </label>
-               </div>
-            </template>
+      <aside class="selection-panel">
+        <div class="panel-header">
+           <div class="section-title">参数配置 / Configuration</div>
+           <p class="section-desc">修改任意项，全局引用变量同步更新</p>
+        </div>
 
-            <!-- Fill Type -->
-            <template v-else-if="item.material.type === 'fill'">
-              <div class="input-wrapper">
-                <textarea v-if="item.material.fillType === 'text'" v-model="state.fillValues[item.key]" placeholder="填写内容..." rows="1"></textarea>
-                <input v-else v-model="state.fillValues[item.key]" type="date" @click="(e: any) => e.target.showPicker()" />
+        <div class="selection-scroll-area">
+          <!-- 1. Global Variables Section (Sticky or Top) -->
+          <div v-if="globalVars.length > 0" class="config-group-card global-vars-card">
+            <div class="group-header">
+              <span class="group-tag">Global</span>
+              <span class="group-name">全局变量 / Variables</span>
+            </div>
+            <div class="tree-container">
+              <div v-for="v in globalVars" :key="'global-'+v.id" class="config-item">
+                <div class="item-header">
+                  <span class="type-icon fill"></span>
+                  <label>{{ v.name }} <span class="var-name-hint">({{ v.varName }})</span></label>
+                </div>
+                <div class="item-control">
+                  <div class="input-wrapper">
+                    <textarea 
+                      v-if="v.fillType === 'text'" 
+                      v-model="state.fillValues[v.id]" 
+                      @input="syncByVarName(v)"
+                      placeholder="统一修改..." 
+                      rows="1"
+                    ></textarea>
+                    <div class="date-input-group">
+                      <input 
+                        v-model="state.fillValues[v.id]" 
+                        @input="syncByVarName(v)"
+                        type="date" 
+                        @click="(e: any) => e.target.showPicker()"
+                      />
+                      <button v-if="state.fillValues[v.id]" class="btn-clear-date" @click="state.fillValues[v.id] = ''; syncByVarName(v)" title="清空日期">
+                        <lucide-x :size="12" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </template>
+            </div>
+          </div>
 
-            <!-- Fixed Type (Show a preview) -->
-            <template v-else-if="item.material.type === 'fixed'">
-               <div class="fixed-text-preview">{{ item.material.content }}</div>
-            </template>
+          <!-- 2. The Main Layout Tree (Grouped into Cards by Root Nodes) -->
+          <div v-for="group in cardItems" :key="group.id" class="config-group-card">
+            <div v-if="group.rootName" class="group-header">
+              <span class="group-tag">Branch</span>
+              <span class="group-name">{{ group.rootName }}</span>
+            </div>
+            
+            <div class="tree-container">
+              <div 
+                v-for="item in group.items" 
+                :key="item.key" 
+                class="config-item"
+                :class="{ 
+                  'is-fixed': item.material.type === 'fixed',
+                  'is-hidden': !!item.material.varName && item.material.type === 'fill'
+                }"
+                :style="{ marginLeft: (item.depth * 14) + 'px' }"
+              >
+                <!-- Indentation Guide Line -->
+                <div class="tree-guide" v-if="item.depth > 0"></div>
+
+                <div class="item-header">
+                  <span class="type-icon" :class="item.material.type"></span>
+                  <label>{{ item.material.name }}</label>
+                </div>
+
+                <div class="item-control">
+                  <!-- Option Type -->
+                  <template v-if="item.material.type === 'option'">
+                    <div class="chip-container">
+                      <label v-for="opt in item.material.options" :key="opt.id" class="chip" :class="{active: state.selectedOptions[item.material.id]?.includes(opt.value)}">
+                        <input type="checkbox" :value="opt.value" v-model="state.selectedOptions[item.material.id]" style="display:none" />
+                        {{ opt.label }}
+                      </label>
+                    </div>
+                  </template>
+
+                  <!-- Fill Type (If not treated as global or for instance specific overrides) -->
+                  <template v-else-if="item.material.type === 'fill'">
+                    <div class="input-wrapper">
+                      <textarea 
+                          v-if="item.material.fillType === 'text'" 
+                          v-model="state.fillValues[item.id]" 
+                          @input="syncGlobal(item.material)"
+                          placeholder="点此输入..." 
+                          rows="1"
+                      ></textarea>
+                      <div class="date-input-group">
+                        <input 
+                            v-model="state.fillValues[item.id]" 
+                            @input="syncGlobal(item.material)"
+                            type="date" 
+                            @click="(e: any) => e.target.showPicker()" 
+                        />
+                        <button v-if="state.fillValues[item.id]" class="btn-clear-date" @click="state.fillValues[item.id] = ''; syncGlobal(item.material)" title="清空日期">
+                          <lucide-x :size="12" />
+                        </button>
+                      </div>
+                    </div>
+                  </template>
+
+                  <!-- Fixed Type -->
+                  <template v-else-if="item.material.type === 'fixed'">
+                    <div class="fixed-text-preview" v-html="highlightVars(item.material.content)"></div>
+                  </template>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div v-if="activeConfigItems.length === 0" class="empty-hint">
-            <span class="icon">🧩</span>
-            <p>请先在编辑器中添加素材并完成排版</p>
+        <div v-if="visibleItems.length === 0" class="empty-hint">
+          <span class="icon">🧩</span>
+          <p>请先在编辑器中添加素材</p>
         </div>
       </aside>
+
+
+
 
       <!-- Right: Preview -->
       <main class="preview-panel">
@@ -111,7 +186,8 @@ import {
   ChevronLeft as LucideChevronLeft, 
   Copy as LucideCopy,
   Eye as LucideEye,
-  Pencil as LucideEdit
+  Pencil as LucideEdit,
+  X as LucideX
 } from 'lucide-vue-next';
 import { generateText, getDefaultState } from '../utils/generator';
 import type { GenerationState } from '../utils/generator';
@@ -136,21 +212,27 @@ onMounted(async () => {
   }
 });
 
-const activeConfigItems = computed(() => {
+const visibleItems = computed(() => {
   if (!currentProject.value) return [];
-  const items: { material: any, key: string, depth: number }[] = [];
+  const items: { material: any, key: string, id: string, depth: number }[] = [];
 
   const scan = (layoutItems: LayoutItem[], depth: number = 0) => {
     layoutItems.forEach(item => {
       const material = currentProject.value!.materials.find(m => m.id === item.materialId);
       if (!material) return;
-
-      // Include ALL nodes to represent the full project structure
-      items.push({ material, key: item.id, depth });
       
-      // Step into children
-      if (item.children && item.children.length > 0) {
-        scan(item.children, depth + 1);
+      // Node is always added
+      items.push({ material, key: item.id, id: item.id, depth });
+      
+      // But we only recurse if it's not an OPTION or if the OPTION has a selection
+      let shouldRecurse = true;
+      if (material.type === 'option') {
+          const selected = state.selectedOptions[material.id] || [];
+          if (selected.length === 0) shouldRecurse = false;
+      }
+      
+      if (shouldRecurse && item.children) {
+          scan(item.children, depth + 1);
       }
     });
   };
@@ -158,6 +240,130 @@ const activeConfigItems = computed(() => {
   scan(currentProject.value.layout);
   return items;
 });
+
+const globalVars = computed(() => {
+    if (!currentProject.value) return [];
+    
+    const activeMaterials = visibleItems.value.map(i => i.material);
+    const activeMaterialIds = new Set(activeMaterials.map(m => m.id));
+    
+    const referencedVarNames = new Set<string>();
+    activeMaterials.forEach(m => {
+        if (m.type === 'fixed' && m.content) {
+            const matches = m.content.matchAll(/\{\{(.*?)\}\}/g);
+            for (const match of matches) {
+                referencedVarNames.add(match[1].trim());
+            }
+        }
+    });
+    
+    // Use a record to ensure uniqueness by varName
+    const varsMap = new Map();
+    currentProject.value.materials.forEach(m => {
+        if (m.type === 'fill' && m.varName) {
+            const isExplicitInLayout = activeMaterialIds.has(m.id);
+            const isReferencedByText = referencedVarNames.has(m.varName);
+            
+            if (isExplicitInLayout || isReferencedByText) {
+                // If multiple materials have same varName, we only show the first one 
+                // found in the project library to avoid duplicates in the UI
+                if (!varsMap.has(m.varName)) {
+                    varsMap.set(m.varName, m);
+                }
+            }
+        }
+    });
+    
+    return Array.from(varsMap.values());
+});
+
+const cardItems = computed(() => {
+    if (!currentProject.value) return [];
+    const groups: { id: string, rootName: string | null, items: any[] }[] = [];
+    
+    currentProject.value.layout.forEach(root => {
+        const material = currentProject.value!.materials.find(m => m.id === root.materialId);
+        const group: { id: string, rootName: string | null, items: any[] } = {
+            id: root.id,
+            rootName: material?.name || 'Untitled Branch',
+            items: []
+        };
+        
+        const scan = (item: LayoutItem, depth: number = 0) => {
+            const mat = currentProject.value!.materials.find(m => m.id === item.materialId);
+            if (!mat) return;
+            group.items.push({ material: mat, key: item.id, id: item.id, depth });
+            
+            let shouldRecurse = true;
+            if (mat.type === 'option') {
+                const selected = state.selectedOptions[mat.id] || [];
+                if (selected.length === 0) shouldRecurse = false;
+            }
+
+            if (shouldRecurse && item.children) {
+                item.children.forEach(c => scan(c, depth + 1));
+            }
+        };
+        
+        scan(root);
+        // Only add group if root is present
+        if (group.items.length > 0) {
+            groups.push(group);
+        }
+    });
+    
+    return groups;
+});
+
+
+
+const highlightVars = (text: string) => {
+    return text.replace(/\{\{(.*?)\}\}/g, '<span class="var-badge">$1</span>');
+};
+
+const syncGlobal = (material: any) => {
+    if (!material) return;
+    const materialId = material.id;
+    const items = visibleItems.value;
+    const instancesOfSameMaterial = items.filter(i => i.material.id === materialId);
+    
+    const firstInstance = instancesOfSameMaterial.find(i => state.fillValues[i.id] !== undefined) || instancesOfSameMaterial[0];
+    if (!firstInstance) return;
+
+    const sourceValue = state.fillValues[firstInstance.id];
+    if (sourceValue !== undefined) {
+        state.fillValues[materialId] = sourceValue;
+        
+        instancesOfSameMaterial.forEach(inst => {
+            state.fillValues[inst.id] = sourceValue;
+        });
+
+        // Also sync by varName if exists
+        if (material.varName) {
+            syncByVarName(material);
+        }
+    }
+};
+
+const syncByVarName = (material: any) => {
+    if (!material.varName || !currentProject.value) return;
+    const val = state.fillValues[material.id];
+    
+    // Find all materials with same varName
+    currentProject.value.materials.forEach(m => {
+        if (m.varName === material.varName && m.type === 'fill') {
+            state.fillValues[m.id] = val;
+            // Also update all their visible layout instances
+            visibleItems.value.forEach(item => {
+                if (item.material.id === m.id) {
+                    state.fillValues[item.id] = val;
+                }
+            });
+        }
+    });
+};
+
+
 
 
 
@@ -325,66 +531,154 @@ const copyAll = () => {
 }
 
 .selection-panel {
-  width: 220px;
-  padding: 16px;
-  background: white;
-  overflow-y: auto;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  width: 320px;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
 }
 
+.panel-header {
+    margin-bottom: 16px;
+    padding: 0 4px;
+}
+
+.selection-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
 
 .section-title {
     font-size: 11px;
     font-weight: 800;
-    color: #94a3b8;
-    margin-bottom: 16px;
+    color: #4f46e5;
     text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
+.section-desc {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-top: 4px;
+}
+
+.config-group-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.global-vars-card {
+    border-color: #e0e7ff;
+    background: #fcfdff;
+}
+
+.group-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.group-tag {
+    font-size: 9px;
+    text-transform: uppercase;
+    font-weight: 800;
+    color: white;
+    background: #6366f1;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.global-vars-card .group-tag {
+    background: #4f46e5;
+}
+
+.group-name {
+    font-size: 14px;
+    font-weight: 800;
+    color: #1e293b;
+}
+
+.tree-container {
+    display: flex;
+    flex-direction: column;
+}
 
 .config-item {
   margin-bottom: 20px;
+  position: relative;
+}
+
+.config-item.is-hidden {
+    display: none;
+}
+
+.config-item:last-child {
+    margin-bottom: 0;
+}
+
+.var-name-hint {
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.tree-guide {
+    position: absolute;
+    left: -12px;
+    top: 0;
+    bottom: -20px;
+    width: 1.5px;
+    background: #f1f5f9;
 }
 
 
 .item-header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
-    position: relative;
+    gap: 6px;
+    margin-bottom: 6px;
 }
-
-.header-line {
-    position: absolute;
-    left: -10px;
-    top: 50%;
-    width: 6px;
-    height: 1.5px;
-    background: #e2e8f0;
-}
-
 
 .item-header label {
-    font-size: 13px;
-    font-weight: 700;
-    color: #1e293b;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-
-.parent-ref {
     font-size: 12px;
-    color: #6366f1;
     font-weight: 700;
-    background: #eef2ff;
-    padding: 2px 6px;
-    border-radius: 4px;
+    color: #475569;
 }
 
+.var-badge {
+    background: #eef2ff;
+    color: #4f46e5;
+    padding: 0 4px;
+    border-radius: 4px;
+    font-weight: 800;
+    font-family: monospace;
+    border: 1px solid #e0e7ff;
+}
+
+.fixed-text-preview {
+  font-size: 11px;
+  color: #94a3b8;
+  padding: 8px;
+  background: #f8fafc;
+  border-radius: 6px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.config-item.is-fixed {
+    opacity: 0.9;
+}
+
+/* RESTORED STYLES */
 .type-icon {
     width: 8px;
     height: 8px;
@@ -397,20 +691,22 @@ const copyAll = () => {
 .chip-container {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
+  margin-top: 4px;
 }
 
 .chip {
   padding: 4px 10px;
   border-radius: 6px;
   background: #f8fafc;
-  font-size: 12px;
+  font-size: 11px;
   color: #64748b;
   cursor: pointer;
   border: 1px solid #e2e8f0;
   transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
 }
-
 
 .chip:hover {
     background: #f1f5f9;
@@ -421,24 +717,24 @@ const copyAll = () => {
   background: #eff6ff;
   color: #2563eb;
   border-color: #3b82f6;
-  font-weight: 500;
+  font-weight: 700;
   box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
 }
 
 .input-wrapper input, .input-wrapper textarea {
     width: 100%;
-    padding: 10px 12px;
+    padding: 8px 12px;
     background: #f8fafc;
     border: 1.5px solid #e2e8f0;
     border-radius: 8px;
-    font-size: 13px;
+    font-size: 12px;
     font-family: inherit;
     transition: all 0.2s;
 }
 
 .input-wrapper textarea {
     resize: vertical;
-    min-height: 60px;
+    min-height: 40px;
 }
 
 .input-wrapper input:focus, .input-wrapper textarea:focus {
@@ -448,22 +744,33 @@ const copyAll = () => {
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
-.fixed-text-preview {
-  font-size: 11px;
-  color: #94a3b8;
-  padding: 4px 8px;
-  background: #f8fafc;
-  border-radius: 4px;
-  border-left: 2px solid #e2e8f0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
+.date-input-group {
+    position: relative;
+    display: flex;
+    align-items: center;
 }
 
-.config-item.is-fixed {
-    margin-bottom: 8px;
-    opacity: 0.8;
+.btn-clear-date {
+    position: absolute;
+    right: 30px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: #f1f5f9;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2;
+}
+
+.btn-clear-date:hover {
+    background: #fee2e2;
+    color: #ef4444;
 }
 
 
