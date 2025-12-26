@@ -98,11 +98,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, inject } from 'vue';
 import { Trash2 as LucideTrash2, ListOrdered as LucideListOrdered } from 'lucide-vue-next';
 import { useProjectStore } from '../../store/projectStore';
 import { nanoid } from 'nanoid';
-import type { Project, LayoutItem } from '../../types/project';
+import type { Project, LayoutItem, Material } from '../../types/project';
 import BasePopover from '../common/BasePopover.vue';
 import MaterialInfoCard from '../common/MaterialInfoCard.vue';
 
@@ -115,6 +115,7 @@ const props = defineProps<{
 defineOptions({ name: 'LayoutNode' });
 const emit = defineEmits(['remove']);
 const store = useProjectStore();
+const openMaterialEditor = inject('openMaterialEditor') as ((m: Material) => void) | undefined;
 const dragOverPos = ref<'top' | 'bottom' | 'nest' | null>(null);
 
 const material = computed(() => {
@@ -255,7 +256,11 @@ const cycleStyle = () => {
     props.node.numberingStyle = s[(idx + 1) % s.length];
 };
 
-const onEdit = () => {};
+const onEdit = () => {
+  if (material.value && openMaterialEditor) {
+    openMaterialEditor(material.value);
+  }
+};
 
 </script>
 

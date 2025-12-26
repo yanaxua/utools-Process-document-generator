@@ -39,7 +39,38 @@
       <!-- Type Specific Fields -->
       <div v-if="localMaterial.type === 'fixed'" class="form-group">
         <label>固定内容</label>
-        <textarea v-model="localMaterial.content" rows="4" placeholder="生成时直接使用的文本，可用变量如 {{版本}}..."></textarea>
+        <div class="textarea-wrapper">
+          <textarea 
+            ref="contentTextarea"
+            v-model="localMaterial.content" 
+            rows="4" 
+            placeholder="生成时直接使用的文本，可用变量如 {{版本}}..."
+            @input="handleContentInput"
+            @keydown="handleContentKeydown"
+            @click="handleContentInput"
+            @blur="() => setTimeout(() => showSuggestions = false, 200)"
+          ></textarea>
+          
+          <div v-if="showSuggestions" class="suggestion-popover" :style="{ top: suggestPos.top + 'px', left: suggestPos.left + 'px' }">
+            <div v-if="availableVars.length === 0" class="suggest-empty">无匹配变量</div>
+            <div 
+              v-for="(v, index) in availableVars" 
+              :key="v.name + index"
+              class="suggest-item"
+              :class="{ active: index === suggestionIdx }"
+              @mousedown.prevent="insertSuggestion(v)"
+            >
+              <span class="s-icon" :class="v.icon">
+                <lucide-type v-if="v.icon === 'fixed' || v.icon === 'fill'" :size="10" />
+                <lucide-list v-else :size="10" />
+              </span>
+              <div class="s-info">
+                  <span class="s-name">{{ v.name }}</span>
+                  <span class="s-desc">{{ v.desc }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div v-if="localMaterial.type === 'option'" class="form-group">
@@ -90,12 +121,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { 
   Type as LucideType, 
   X as LucideX, 
   GripVertical as LucideGripVertical,
-  Plus as LucidePlus 
+  Plus as LucidePlus,
+  ListOrdered as LucideList
 } from 'lucide-vue-next';
 import draggable from 'vuedraggable';
 import { nanoid } from 'nanoid';
@@ -108,18 +140,169 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits(['update:modelValue', 'confirm']);
+import { useProjectStore } from '../../store/projectStore';
+import { storeToRefs } from 'pinia';
+
+const store = useProjectStore();
+const { currentProject } = storeToRefs(store);
 
 const localMaterial = ref<Material | null>(null);
 const newOptionVal = ref('');
 const nameInput = ref<HTMLInputElement | null>(null);
 
+// --- Variable Suggestion Logic ---
+const showSuggestions = ref(false);
+const suggestionIdx = ref(0);
+const suggestionQuery = ref('');
+const contentTextarea = ref<HTMLTextAreaElement | null>(null);
+const suggestPos = ref({ top: 0, left: 0 });
+
+const availableVars = computed(() => {
+  if (!currentProject.value) return [];
+  return currentProject.value.materials
+    .filter(m => m.varName && m.id !== localMaterial.value?.id) // Exclude self if needed, or include self? Usually variables refer to *other* inputs, but self reference might be valid or invalid. Let's include all others.
+    .map(m => ({ 
+      name: m.varName!, 
+      desc: m.name,
+      icon: m.type
+    }))
+    .filter(v => v.name.toLowerCase().includes(suggestionQuery.value.toLowerCase()));
+});
+
+const insertSuggestion = (v: { name: string }) => {
+  if (!contentTextarea.value || !localMaterial.value) return;
+  const el = contentTextarea.value;
+  const val = localMaterial.value.content || ''; // Ensure content is string
+  const cursor = el.selectionEnd;
+  
+  // Find the start of the {{
+  const lastOpen = val.lastIndexOf('{{', cursor);
+  if (lastOpen !== -1) {
+    const prefix = val.substring(0, lastOpen + 2); // Keep {{
+    const suffix = val.substring(cursor); // After cursor, likely }} or more text
+    
+    // Check if we already have closing brackets immediately after cursor (from auto-complete)
+    let newSuffix = suffix;
+    if (newSuffix.startsWith('}}')) {
+       newSuffix = newSuffix.substring(2);
+    } 
+
+    localMaterial.value.content = `${prefix}${v.name}}}${newSuffix}`;
+    
+    // Fix cursor position
+    const newCursorPos = lastOpen + 2 + v.name.length + 2; 
+    setTimeout(() => {
+        el.setSelectionRange(newCursorPos, newCursorPos);
+        el.focus();
+    });
+  }
+  showSuggestions.value = false;
+};
+
+// Mirror div for caret coordinates
+const getCaretCoordinates = () => {
+    const el = contentTextarea.value;
+    if (!el) return { top: 0, left: 0 };
+    
+    const { selectionStart } = el;
+    const div = document.createElement('div');
+    const style = window.getComputedStyle(el);
+    for (const prop of Array.from(style)) {
+        div.style.setProperty(prop, style.getPropertyValue(prop));
+    }
+    div.style.position = 'absolute';
+    div.style.visibility = 'hidden';
+    div.style.whiteSpace = 'pre-wrap';
+    div.style.height = 'auto'; // Recalculate height
+    div.style.width = el.offsetWidth + 'px'; // Exact width match
+    
+    div.textContent = (localMaterial.value?.content || '').substring(0, selectionStart);
+    const span = document.createElement('span');
+    span.textContent = '|';
+    div.appendChild(span);
+    
+    document.body.appendChild(div);
+    const { offsetLeft, offsetTop } = span;
+    const rect = el.getBoundingClientRect(); // relative to viewport
+    document.body.removeChild(div);
+    
+    // We want position relative to the wrapper
+    // The wrapper is "input-overlay-wrapper" (to be added)
+    // Actually simpler: return relative to the textarea's top-left content box
+    const lineHeight = style.lineHeight === 'normal' ? '20' : style.lineHeight;
+    return {
+        left: offsetLeft,
+        top: offsetTop + parseInt(lineHeight) // Move down one line
+    };
+};
+
+const handleContentInput = (e: Event) => {
+    const el = e.target as HTMLTextAreaElement;
+    const val = el.value;
+    const cursor = el.selectionEnd;
+    
+    // 1. Check for {{ auto-complete
+    if ((e as InputEvent).data === '{' && val.slice(cursor - 2, cursor) === '{{') {
+        // If next chars are not already }}, insert them
+        if (val.slice(cursor, cursor + 2) !== '}}') {
+            const newVal = val.slice(0, cursor) + '}}' + val.slice(cursor);
+            localMaterial.value!.content = newVal;
+            // Restore cursor
+            setTimeout(() => el.setSelectionRange(cursor, cursor), 0);
+        }
+    }
+
+    // 2. Check if we are inside {{ }}
+    const lastOpen = val.lastIndexOf('{{', cursor);
+    const lastClose = val.lastIndexOf('}}', cursor);
+    
+    if (lastOpen !== -1 && lastOpen > lastClose) {
+        // We are inside an open tag
+        // Check if there is a closing tag coming up shortly (to ensure we are in a valid block)
+        // Actually simpler: just assume editing if open > close found before cursor
+        
+        // Extract query
+        const query = val.slice(lastOpen + 2, cursor);
+        // Only suggest if query doesn't contain newlines or invalid chars?
+        if (!query.includes('\n')) {
+            suggestionQuery.value = query.trim();
+            showSuggestions.value = true;
+            suggestionIdx.value = 0;
+            suggestPos.value = getCaretCoordinates();
+            return;
+        }
+    }
+    
+    showSuggestions.value = false;
+};
+
+const handleContentKeydown = (e: KeyboardEvent) => {
+    if (!showSuggestions.value) return;
+    
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        suggestionIdx.value = (suggestionIdx.value + 1) % availableVars.value.length;
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        suggestionIdx.value = (suggestionIdx.value - 1 + availableVars.value.length) % availableVars.value.length;
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (availableVars.value.length > 0) {
+            insertSuggestion(availableVars.value[suggestionIdx.value]);
+        }
+    } else if (e.key === 'Escape') {
+        showSuggestions.value = false;
+    }
+};
+
 watch(() => props.modelValue, (newVal) => {
   if (newVal) {
     localMaterial.value = JSON.parse(JSON.stringify(newVal));
-    // Focus after open
+    if(!localMaterial.value.content) localMaterial.value.content = ''; // Ensure content init
     setTimeout(() => nameInput.value?.focus(), 100);
   } else {
     localMaterial.value = null;
+    showSuggestions.value = false;
   }
 }, { immediate: true });
 
@@ -341,6 +524,89 @@ input:focus, select:focus, textarea:focus {
 .btn-clear-date:hover {
     background: #fee2e2;
     color: #ef4444;
+}
+
+
+.textarea-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.suggestion-popover {
+    position: absolute;
+    z-index: 9999;
+    background: white;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-radius: 8px;
+    width: 220px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.suggest-item {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.1s;
+}
+
+.suggest-item:hover, .suggest-item.active {
+    background: #f1f5f9;
+}
+
+.suggest-item.active {
+    background: #eef2ff;
+}
+
+.suggest-empty {
+    padding: 8px;
+    font-size: 11px;
+    color: #94a3b8;
+    text-align: center;
+}
+
+.s-icon {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    background: #f8fafc;
+    color: #64748b;
+}
+
+.s-icon.fixed { background: #f1f5f9; }
+.s-icon.option { background: #ecfdf5; color: #059669; }
+.s-icon.fill { background: #eff6ff; color: #3b82f6; }
+
+
+.s-info {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.s-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.s-desc {
+    font-size: 10px;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 </style>

@@ -85,7 +85,7 @@ function processLayoutItem(item: LayoutItem, project: Project, state: Generation
 
   for (const val of currentValues) {
     for (const combo of childCombinations) {
-      allCombinations.push(`${val} ${combo.join(' ')}`.trim());
+      allCombinations.push(`${val}${combo.join('')}`.trim());
     }
   }
 

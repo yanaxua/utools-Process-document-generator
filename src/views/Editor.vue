@@ -95,8 +95,9 @@
       <main class="layout-area">
         <div class="canvas premium-card">
           <div class="canvas-header">
-            <div class="header-title">
-              <h3>排版布局</h3>
+            <div class="header-group">
+               <span class="header-dot"></span>
+               <span class="section-title">排版布局</span>
             </div>
           </div>
           
@@ -137,7 +138,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, onMounted, computed, watch, provide } from 'vue';
 import { useRouter } from 'vue-router';
 import { useProjectStore } from '../store/projectStore';
 import { storeToRefs } from 'pinia';
@@ -201,6 +202,8 @@ const handleStartEdit = (m: Material) => {
   // 深度克隆以支持取消操作
   editingMaterial.value = JSON.parse(JSON.stringify(m));
 };
+
+provide('openMaterialEditor', handleStartEdit);
 
 const cancelEdit = () => {
   editingMaterial.value = null;
@@ -467,9 +470,10 @@ const removeItem = (id: string) => {
 }
 
 .canvas-header {
-  padding: 10px 16px;
+  padding: 0 16px;
   background: white;
   border-bottom: 1.5px solid #f1f5f9;
+  height: 36px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -561,8 +565,10 @@ const removeItem = (id: string) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 8px;
+  padding: 0 8px;
+  height: 36px;
   margin-bottom: 14px;
+  border-bottom: 1.5px solid #f1f5f9;
 }
 
 .header-group {

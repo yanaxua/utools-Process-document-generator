@@ -15,10 +15,7 @@
         </div>
       </div>
       <div class="header-right">
-        <button class="btn-secondary ghost" @click="router.push(`/editor/${currentProject.id}`)">
-          <lucide-edit :size="16" />
-          <span>返回编辑</span>
-        </button>
+
         <button class="btn-primary" @click="copyAll">
           <lucide-copy :size="16" />
           <span>一键复制</span>
@@ -30,8 +27,10 @@
       <!-- Left: Selection -->
       <aside class="selection-panel">
         <div class="panel-header">
-           <div class="section-title">参数配置 / Configuration</div>
-           <p class="section-desc">修改任意项，全局引用变量同步更新</p>
+           <div class="header-group">
+             <span class="header-dot"></span>
+             <span class="section-title">参数配置</span>
+           </div>
         </div>
 
         <div class="selection-scroll-area">
@@ -56,7 +55,7 @@
                       placeholder="统一修改..." 
                       rows="1"
                     ></textarea>
-                    <div class="date-input-group">
+                    <div class="date-input-group" v-if="v.fillType === 'date'">
                       <input 
                         v-model="state.fillValues[v.id]" 
                         @input="syncByVarName(v)"
@@ -105,7 +104,7 @@
                     <div class="chip-container">
                       <label v-for="opt in item.material.options" :key="opt.id" class="chip" :class="{active: state.selectedOptions[item.material.id]?.includes(opt.value)}">
                         <input type="checkbox" :value="opt.value" v-model="state.selectedOptions[item.material.id]" style="display:none" />
-                        {{ opt.label }}
+                        {{ opt.value }}
                       </label>
                     </div>
                   </template>
@@ -120,7 +119,7 @@
                           placeholder="点此输入..." 
                           rows="1"
                       ></textarea>
-                      <div class="date-input-group">
+                      <div class="date-input-group" v-if="item.material.fillType === 'date'">
                         <input 
                             v-model="state.fillValues[item.id]" 
                             @input="syncGlobal(item.material)"
@@ -157,13 +156,10 @@
       <main class="preview-panel">
         <div class="preview-container premium-card">
           <div class="preview-header">
-            <div class="title">
-              <lucide-eye :size="16" />
-              <h3>实时预览</h3>
+            <div class="title header-group">
+               <span class="header-dot"></span>
+               <span class="section-title">实时预览</span>
             </div>
-            <button @click="copyAll" class="copy-btn-mini">
-                <lucide-copy :size="14" /> 拷贝
-            </button>
           </div>
           <div class="preview-content">
             <pre v-if="generatedText">{{ generatedText }}</pre>
@@ -532,20 +528,26 @@ const copyAll = () => {
 
 .selection-panel {
   width: 320px;
-  background: transparent;
   display: flex;
   flex-direction: column;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
 }
 
 .panel-header {
-    margin-bottom: 16px;
-    padding: 0 4px;
+    padding: 0 16px;
+    border-bottom: 1.5px solid #f1f5f9;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    margin-bottom: 0;
 }
 
 .selection-scroll-area {
     flex: 1;
     overflow-y: auto;
-    padding-right: 8px;
+    padding: 12px; /* Internal padding for content */
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -554,28 +556,25 @@ const copyAll = () => {
 .section-title {
     font-size: 11px;
     font-weight: 800;
-    color: #4f46e5;
+    color: #1e293b; /* Match Editor */
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
 
-.section-desc {
-    font-size: 11px;
-    color: #94a3b8;
-    margin-top: 4px;
-}
+.section-desc { display: none; }
 
 .config-group-card {
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 16px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    /* Flatten style - no more card */
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
 }
 
 .global-vars-card {
-    border-color: #e0e7ff;
-    background: #fcfdff;
+    border: none;
+    background: transparent;
 }
 
 .group-header {
@@ -793,7 +792,8 @@ const copyAll = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 16px;
+  padding: 0 16px;
+  height: 36px;
   border-bottom: 1.5px solid #f1f5f9;
 }
 
@@ -868,4 +868,20 @@ const copyAll = () => {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+.header-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.header-dot {
+    width: 4px;
+    height: 4px;
+    background: #4f46e5;
+    border-radius: 50%;
+}
+
+/* Ensure panel-header aligns correctly */
+
 </style>

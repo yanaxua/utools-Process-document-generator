@@ -137,55 +137,169 @@ const handleCreate = async () => {
 const createDemoProject = async () => {
   const demo: Project = {
     id: nanoid(),
-    name: '示例：多环境动态配置手册',
-    description: '演示：客户 > 环境 > 模块 > 版本 的深度嵌套与动态配置同步',
+    name: '示例：线灵系统发版邮件v6',
+    description: '演示：发布步骤深度定制，包含动态服务器IP与SQL附件',
     updatedAt: Date.now(),
     materials: [
-      { id: 'm1', name: '邮件页眉', type: 'fixed', content: '各位好，本日发版任务如下：' },
-      { id: 'm2', name: '选择客户', type: 'option', options: [
-          { id: 'c1', value: '【字节跳动】' },
-          { id: 'c2', value: '【美团点评】' }
+      // 1. Opening
+      { id: 'm_dear', name: '称呼前缀', type: 'fixed', content: 'Dear ' },
+      { id: 'opt_receiver', name: '收件人', type: 'option', options: [
+          { id: 'r1', value: 'James' },
+          { id: 'r2', value: 'Wentao' },
+          { id: 'r3', value: 'All' }
       ]},
-      { id: 'm3', name: '所属环境', type: 'option', options: [
-          { id: 'e1', value: '👉 生产 PROD' },
-          { id: 'e2', value: '🧪 预发 STAGE' }
+      { id: 'm_comma', name: '称呼后缀', type: 'fixed', content: ',\n' },
+
+      // Global Options
+      { id: 'opt_tenant', name: '发布租户', type: 'option', options: [
+          { id: 't1', value: 'DEMO' },
+          { id: 't2', value: 'HKMU' },
+          { id: 't3', value: 'EL' },
+          { id: 't4', value: 'GMITEC' }
       ]},
-      { id: 'm4', name: '具体模块', type: 'option', options: [
-          { id: 'a1', value: '核心网关' },
-          { id: 'a2', value: '支付服务' },
-          { id: 'a3', value: '监控组件' }
+      { id: 'opt_env', name: '发布环境', type: 'option', options: [
+          { id: 'e1', value: 'PROD' },
+          { id: 'e2', value: 'UAT' }
       ]},
-      { id: 'm5', name: '同步版本号', type: 'fill', fillType: 'text', varName: 'target_ver', defaultValue: 'v2.4.0' },
-      { id: 'm6', name: '生效日期', type: 'fill', fillType: 'date', varName: 'pub_date', defaultValue: format(new Date(), 'yyyy-MM-dd') },
-      { id: 'm7', name: '责任确认', type: 'fixed', content: '\n以上内容计划于 {{pub_date}} 正式发布，版本号统一为 {{target_ver}}，请各方注意流量切换。' }
+
+      // 2. Summary
+      { id: 'sum_pre', name: '概览前缀', type: 'fixed', content: '线灵系统-' },
+      { id: 'sum_apply', name: '概览动作', type: 'fixed', content: '申请发布' },
+      { id: 'sum_env_suf', name: '环境后缀', type: 'fixed', content: '环境，版本 ' },
+      { id: 'v_ver', name: '版本号', type: 'fill', fillType: 'text', defaultValue: 'release_1.0.0' },
+      { id: 'sum_end', name: '概览结束', type: 'fixed', content: '；' },
+
+      // 3. Transition
+      { id: 'trans_1', name: '提交说明', type: 'fixed', content: '\n相关代码已提交，现申请 ' },
+      { id: 'v_date', name: '发布日期', type: 'fill', fillType: 'date', varName: 'pub_date', defaultValue: format(new Date(), 'yyyy-MM-dd') },
+      { id: 'trans_2', name: '审批申请', type: 'fixed', content: ' 发布，请审批。' },
+
+      // 4. Content
+      { id: 'content_title', name: '内容标题', type: 'fixed', content: '\n本次发布内容：\n' },
+      { id: 'v_content', name: '发布内容', type: 'fill', fillType: 'text', defaultValue: '1.      上传文件名称过长问题优化' },
+      
+      // 5. Steps Details
+      { id: 'step_header', name: '步骤总标题', type: 'fixed', content: '\n本次发布步骤\n' },
+      { id: 'stp_und', name: '连接符', type: 'fixed', content: '_' },
+      { id: 'stp_suf', name: '租户后缀', type: 'fixed', content: '本次发布步骤：\n' },
+      
+      { id: 'stp_srv_lbl', name: '服务器标签', type: 'fixed', content: '服务器：' },
+      { id: 'v_srv_ip', name: '服务器IP', type: 'fill', fillType: 'text', defaultValue: '192.168.1.5' },
+      
+      { id: 'stp_sql_lbl', name: 'SQL步骤', type: 'fixed', content: '\n1) 执行附件SQL: ' },
+      { id: 'v_sql', name: 'SQL附件', type: 'fill', fillType: 'text', varName: 'sql_file', defaultValue: '20251128上线_all_release.sql' },
+      
+      { id: 'stp_jenk_1', name: 'Jenkins步骤前缀', type: 'fixed', content: '；\n2) 执行' },
+      { id: 'stp_jenk_2', name: 'Jenkins步骤连接', type: 'fixed', content: '环境的Jenkins任务, tag: ' },
+      { id: 'stp_end', name: '步骤结束', type: 'fixed', content: '；' },
+
+      // 6. Footer
+      { id: 'footer', name: '邮件落款', type: 'fixed', content: '\nBest Regards\nWentao Yan' }
     ],
     layout: [
-      { id: 'l1', materialId: 'm1', children: [] },
+      // 1. Opening
       { 
-        id: 'l2', 
-        materialId: 'm2', 
-        children: [
-          { 
-            id: 'l3', 
-            materialId: 'm3', 
-            children: [
-              { 
-                id: 'l4', 
-                materialId: 'm4', 
-                children: [
-                  { id: 'l5', materialId: 'm5', children: [] }
-                ] 
-              }
-            ] 
-          }
-        ] 
+        id: 'l_root_1', materialId: 'm_dear', children: [
+          { id: 'l_rec', materialId: 'opt_receiver', children: [
+             { id: 'l_com', materialId: 'm_comma', children: [] }
+          ]}
+        ]
       },
-      { id: 'l6', materialId: 'm6', children: [] },
-      { id: 'l7', materialId: 'm7', children: [] }
+
+      // 2. Summary
+      { 
+        id: 'l_sum_pre', materialId: 'sum_pre', children: [
+          { 
+            id: 'l_sum_tn', materialId: 'opt_tenant', children: [
+              { 
+                id: 'l_sum_app', materialId: 'sum_apply', children: [
+                  { 
+                    id: 'l_sum_env', materialId: 'opt_env', children: [
+                      { 
+                        id: 'l_sum_sf', materialId: 'sum_env_suf', children: [
+                          { 
+                            id: 'l_sum_ver', materialId: 'v_ver', children: [
+                               { id: 'l_sum_end', materialId: 'sum_end', children: [] }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+
+      // 3. Transition
+      { id: 'l_tr_1', materialId: 'trans_1', children: [
+         { id: 'l_tr_d', materialId: 'v_date', children: [
+            { id: 'l_tr_2', materialId: 'trans_2', children: [] }
+         ]}
+      ]},
+
+      // 4. Content
+      { id: 'l_ct_1', materialId: 'content_title', children: [
+         { id: 'l_ct_v', materialId: 'v_content', children: [] }
+      ]},
+
+      // 5. Steps
+      { id: 'l_stp_h', materialId: 'step_header', children: [] },
+      { 
+        id: 'l_stp_env1', materialId: 'opt_env', children: [
+          { 
+             id: 'l_stp_und', materialId: 'stp_und', children: [
+               { 
+                 id: 'l_stp_tn', materialId: 'opt_tenant', children: [
+                   { 
+                     id: 'l_stp_sf', materialId: 'stp_suf', children: [
+                        // Server IP Line
+                        { 
+                          id: 'l_stp_srv', materialId: 'stp_srv_lbl', children: [
+                             { id: 'l_stp_rip', materialId: 'v_srv_ip', children: [] }
+                          ]
+                        },
+                        // SQL Line
+                        { 
+                          id: 'l_stp_sql1', materialId: 'stp_sql_lbl', children: [
+                             { id: 'l_stp_sqlv', materialId: 'v_sql', children: [] }
+                          ]
+                        },
+                        // Jenkins Line
+                        { 
+                          id: 'l_stp_jk1', materialId: 'stp_jenk_1', children: [
+                            { 
+                              id: 'l_stp_env2', materialId: 'opt_env', children: [
+                                { 
+                                  id: 'l_stp_jk2', materialId: 'stp_jenk_2', children: [
+                                     { 
+                                        id: 'l_stp_ver', materialId: 'v_ver', children: [
+                                           { id: 'l_stp_end', materialId: 'stp_end', children: [] }
+                                        ]
+                                     }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                     ]
+                   }
+                 ]
+               }
+             ]
+          }
+        ]
+      },
+
+      // 6. Footer
+      { id: 'l_ft', materialId: 'footer', children: [] }
     ]
   };
   await store.updateProject(demo);
-  (window as any).utoolsUtils.showNotification('深度嵌套示例已生成，请进入行文模式体验');
+  (window as any).utoolsUtils.showNotification('深度定制版 v6 已生成');
 };
 
 
@@ -479,4 +593,31 @@ textarea {
   from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
 }
+
+.empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    height: 100%;
+    min-height: 300px;
+}
+
+.empty-icon {
+    font-size: 64px;
+    margin-bottom: 24px;
+    opacity: 0.8;
+}
+
+.empty p {
+    font-size: 15px;
+    font-weight: 600;
+    color: #64748b;
+    margin-bottom: 24px;
+}
+
+.mt-4 { margin-top: 16px; }
+
 </style>
